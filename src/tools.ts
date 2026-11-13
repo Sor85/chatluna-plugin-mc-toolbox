@@ -51,8 +51,15 @@ export function registerTools(ctx: Context, config: Config, toolbox: Toolbox, li
         online: status.online,
         max: status.max,
         latencyMs: status.latency,
-        samplePlayers: status.players,
+        protocolName: status.protocolName ?? null,
+        software: status.software ?? null,
+        modLoader: status.modLoader ?? null,
+        players: status.query?.players.length ? status.query.players : status.players.map((player) => player.name),
+        notes: status.notes.map((line) => plainText(line)),
+        mods: status.mods.map((mod) => mod.id).slice(0, 50),
+        plugins: status.query?.plugins.slice(0, 50) ?? [],
         ...status.gamemode ? { gamemode: status.gamemode } : {},
+        ...status.query?.map ? { map: status.query.map } : {},
         ...sent ? { note: cardNote } : {}
       }
     }

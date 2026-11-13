@@ -21,6 +21,7 @@ export interface Config {
   servers: ServerAlias[]
   queryTimeout: number
   allowPrivate: boolean
+  query: boolean
   renderer: 'mc-heads' | 'crafatar'
   broadcast: boolean
   broadcastRelease: boolean
@@ -53,7 +54,9 @@ export const Config: Schema<Config> = Schema.intersect([
     })).role('table').label('常用服务器').description('mc.server 不带参数时查询全部，也可用名称代替地址').default([]),
     queryTimeout: Schema.number().min(1).max(30).label('查询超时（秒）').default(5),
     allowPrivate: Schema.boolean().label('允许查询内网地址')
-      .description('开启后可查询局域网、本机等地址，群成员也能借此探测这些地址').default(false)
+      .description('开启后可查询局域网、本机等地址，群成员也能借此探测这些地址').default(false),
+    query: Schema.boolean().label('尝试 Query 协议')
+      .description('服务器开启 enable-query 时可获取完整玩家列表、插件与地图；未开启时每次查询多等待约 1.5 秒').default(true)
   }).description('服务器查询'),
   Schema.object({
     renderer: Schema.union([

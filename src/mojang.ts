@@ -41,8 +41,42 @@ export function trustedImage(url: string): boolean {
   }
 }
 
+const protocolTable = 'https://raw.githubusercontent.com/PrismarineJS/minecraft-data/master/data/pc/common/protocolVersions.json'
+const protocolTtl = 24 * 60 * 60 * 1000
+
+/** Groups protocol numbers into display names: releases as `first–last`, otherwise the snapshot name. */
+export function protocolNames(entries: unknown[]): Map<number, string> {
+  const groups = new Map<number, { releases: string[]; others: string[] }>()
+  for (const item of entries) {
+    const entry = record(item)
+    const name = text(entry['minecraftVersion'])
+    const protocol = entry['version']
+    if (!name || typeof protocol !== 'number') continue
+    const group = groups.get(protocol) ?? { releases: [], others: [] }
+    groups.set(protocol, group)
+    if (entry['releaseType'] === 'release') group.releases.unshift(name)
+    else group.others.unshift(name)
+  }
+  return new Map([...groups].map(([protocol, { releases, others }]) => {
+    if (releases.length) return [protocol, releases.length === 1 ? releases[0] : `${releases[0]}–${releases.at(-1)}`]
+    return [protocol, others.at(-1) ?? '']
+  }))
+}
+
 export class MojangClient {
+  private protocols?: { expires: number; names: Promise<Map<number, string>> }
+
   constructor(private fetch: typeof globalThis.fetch, private options: MojangOptions) {}
+
+  /** Java protocol table from PrismarineJS minecraft-data, cached for a day; a failed fetch is retried next time. */
+  async protocolName(protocol: number): Promise<string | undefined> {
+    if (!this.protocols || this.protocols.expires < Date.now()) {
+      const names = this.json(protocolTable).then((data) => protocolNames(Array.isArray(data) ? data : []))
+      this.protocols = { expires: Date.now() + protocolTtl, names }
+      names.catch(() => { this.protocols = undefined })
+    }
+    return (await this.protocols.names).get(protocol) || undefined
+  }
 
   private async request(url: string, limit: number): Promise<{ status: number; body: Buffer }> {
     const response = await this.fetch(url, {

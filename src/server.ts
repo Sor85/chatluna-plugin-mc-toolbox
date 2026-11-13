@@ -2,7 +2,7 @@ import { createSocket } from 'node:dgram'
 import { BlockList, isIP, Socket } from 'node:net'
 import { lookup, resolveSrv } from 'node:dns/promises'
 import { randomBytes } from 'node:crypto'
-import type { Edition, ServerStatus, TextSegment } from './types'
+import type { Edition, ModInfo, QueryDetails, ServerStatus, TextSegment } from './types'
 import { parseMotd, plainText } from './motd'
 
 export interface ServerTarget {
@@ -13,6 +13,8 @@ export interface ServerTarget {
 export interface QueryOptions {
   timeout: number
   allowPrivate: boolean
+  /** Also try the GameSpy4 query protocol, which answers only when the server enables it. */
+  query: boolean
   signal: AbortSignal
 }
 
@@ -102,9 +104,22 @@ interface JavaResponse {
   players?: { online?: unknown; max?: unknown; sample?: unknown }
   description?: unknown
   favicon?: unknown
-  modinfo?: { modList?: unknown }
+  modinfo?: { type?: unknown; modList?: unknown }
   forgeData?: { mods?: unknown }
+  isModded?: unknown
   enforcesSecureChat?: unknown
+  preventsChatReports?: unknown
+}
+
+const knownSoftware = /\b(Paper|Purpur|Folia|Pufferfish|Leaves|Leaf|Spigot|CraftBukkit|Velocity|BungeeCord|Waterfall|FlameCord|Travertine|Arclight|Mohist|CatServer|Magma|Youer|Banner|Ketting|NeoForge|Forge|Fabric|Quilt|Sponge|Geyser|Nukkit|PowerNukkit|PocketMine-MP|Glowstone|Minestom)\b/i
+const zeroUuid = /^0{8}-?0{4}-?0{4}-?0{4}-?0{12}$/
+const queryTimeout = 1500
+const bedrockGrace = 1000
+
+export function detectSoftware(text: string): string | undefined {
+  const match = knownSoftware.exec(text)
+  if (!match) return
+  return match[1].toLowerCase() === 'pocketmine-mp' ? 'PocketMine-MP' : match[1][0].toUpperCase() + match[1].slice(1)
 }
 
 interface Settle<T> {
@@ -148,8 +163,9 @@ async function javaPing(target: ServerTarget, options: QueryOptions): Promise<Se
     }
   }
   const ip = await resolveAddress(host, options)
+  const query = gs4Query(ip, port, options)
   const started = Date.now()
-  return abortable<ServerStatus>(options, ({ resolve, reject }) => {
+  const status = await abortable<ServerStatus>(options, ({ resolve, reject }) => {
     const socket = new Socket()
     let buffer = Buffer.alloc(0)
     let response: JavaResponse | undefined
@@ -161,7 +177,7 @@ async function javaPing(target: ServerTarget, options: QueryOptions): Promise<Se
     }
     socket.on('connect', () => {
       socket.write(Buffer.concat([
-        packet(0, writeVarInt(767), mcString(target.host), Buffer.from([port >> 8, port & 0xff]), writeVarInt(1)),
+        packet(0, writeVarInt(-1), mcString(target.host), Buffer.from([port >> 8, port & 0xff]), writeVarInt(1)),
         packet(0)
       ]))
     })
@@ -197,13 +213,39 @@ async function javaPing(target: ServerTarget, options: QueryOptions): Promise<Se
     socket.connect(port, ip)
     return () => socket.destroy()
   })
+  return withQuery(status, await query)
+}
+
+function record(value: unknown): Record<string, unknown> | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return
+  return Object.fromEntries(Object.entries(value))
+}
+
+function modList(data: JavaResponse): ModInfo[] {
+  // Proxies such as CubeCraft advertise an empty FML list, so only listed mods count.
+  const mods = Array.isArray(data.forgeData?.mods) ? data.forgeData.mods : Array.isArray(data.modinfo?.modList) ? data.modinfo.modList : []
+  return mods.flatMap((item: unknown) => {
+    const mod = record(item)
+    const id = mod?.['modId'] ?? mod?.['modid']
+    if (typeof id !== 'string' || !id) return []
+    const version = mod?.['modmarker'] ?? mod?.['version']
+    return [{ id: id.slice(0, 64), version: typeof version === 'string' && version ? version.slice(0, 32) : undefined }]
+  }).slice(0, 300)
 }
 
 function javaStatus(data: JavaResponse, meta: { host: string; port: number; ip: string; srv?: string; latency: number }): ServerStatus {
-  const sample = Array.isArray(data.players?.sample) ? data.players.sample : []
-  const mods = data.forgeData?.mods ?? data.modinfo?.modList
+  const sample = (Array.isArray(data.players?.sample) ? data.players.sample : []).slice(0, 40).flatMap((item: unknown) => {
+    const entry = record(item)
+    const name = entry?.['name']
+    if (typeof name !== 'string') return []
+    const id = typeof entry?.['id'] === 'string' ? entry['id'] : ''
+    return [{ name, id }]
+  })
   const favicon = typeof data.favicon === 'string' && /^data:image\/png;base64,[A-Za-z0-9+/=\s]+$/.test(data.favicon) && data.favicon.length < 256 * 1024
     ? data.favicon.replace(/\s/g, '') : undefined
+  const version = plainText(parseMotd(data.version?.name)).trim()
+  const mods = modList(data)
+  const forge = data.forgeData !== undefined || mods.length > 0
   return {
     edition: 'java',
     host: meta.host,
@@ -211,26 +253,80 @@ function javaStatus(data: JavaResponse, meta: { host: string; port: number; ip: 
     ip: meta.ip,
     srv: meta.srv,
     latency: meta.latency,
-    version: plainText(parseMotd(data.version?.name)),
-    protocol: typeof data.version?.protocol === 'number' ? data.version.protocol : undefined,
+    version,
+    protocol: typeof data.version?.protocol === 'number' && data.version.protocol > 0 ? data.version.protocol : undefined,
+    software: detectSoftware(version),
     online: typeof data.players?.online === 'number' ? data.players.online : 0,
     max: typeof data.players?.max === 'number' ? data.players.max : 0,
-    players: sample.flatMap((item: unknown) => {
-      if (typeof item !== 'object' || item === null || !('name' in item) || typeof item.name !== 'string') return []
-      const name = plainText(parseMotd(item.name)).trim()
-      return name ? [name] : []
-    }).slice(0, 20),
+    // A real player has a non-zero UUID and a plain name; anything else is a text line drawn in the player list.
+    players: sample.flatMap(({ name, id }) => !zeroUuid.test(id) && /^[A-Za-z0-9_]{1,16}$/.test(name) && /^[0-9a-f-]{32,36}$/i.test(id)
+      ? [{ name, id: id.replace(/-/g, '').toLowerCase() }] : []),
+    notes: sample.flatMap(({ name, id }) => !zeroUuid.test(id) && /^[A-Za-z0-9_]{1,16}$/.test(name) ? [] : [parseMotd(name)])
+      .filter((line) => plainText(line).trim()),
     motd: parseMotd(data.description),
     favicon,
-    mods: Array.isArray(mods) ? mods.length : undefined,
-    secureChat: typeof data.enforcesSecureChat === 'boolean' ? data.enforcesSecureChat : undefined
+    modLoader: mods.some((mod) => mod.id === 'neoforge') || (data.isModded === true && !forge) ? 'NeoForge' : forge ? 'Forge' : undefined,
+    mods,
+    secureChat: typeof data.enforcesSecureChat === 'boolean' ? data.enforcesSecureChat : undefined,
+    preventsChatReports: typeof data.preventsChatReports === 'boolean' ? data.preventsChatReports : undefined
   }
+}
+
+/** Parses a GameSpy4 full-stat payload (after the type, session id and 11-byte padding). */
+export function parseQuery(payload: Buffer): QueryDetails {
+  const parts = payload.toString('utf8').split('\0')
+  const values = new Map<string, string>()
+  let index = 0
+  for (; index + 1 < parts.length && parts[index] !== ''; index += 2) values.set(parts[index], parts[index + 1])
+  const marker = parts.indexOf('\x01player_', index)
+  const players: string[] = []
+  for (let i = marker + 2; marker >= 0 && i < parts.length && parts[i] !== ''; i++) players.push(parts[i])
+  const plugins = values.get('plugins') ?? ''
+  const separator = plugins.indexOf(':')
+  return {
+    software: (separator < 0 ? plugins : plugins.slice(0, separator)).trim() || undefined,
+    plugins: separator < 0 ? [] : plugins.slice(separator + 1).split(';').map((item) => item.trim()).filter(Boolean).slice(0, 100),
+    map: values.get('map') || undefined,
+    gametype: values.get('gametype') || undefined,
+    players: players.slice(0, 100)
+  }
+}
+
+/** Best effort: most servers keep query disabled, so silence or garbage resolves to `undefined` after a short wait. */
+function gs4Query(ip: string, port: number, options: QueryOptions): Promise<QueryDetails | undefined> {
+  if (!options.query) return Promise.resolve(undefined)
+  return abortable<QueryDetails | undefined>({ ...options, timeout: Math.min(options.timeout, queryTimeout) }, ({ resolve }) => {
+    const socket = createSocket(isIP(ip) === 6 ? 'udp6' : 'udp4')
+    const session = randomBytes(4).readUInt32BE() & 0x0f0f0f0f
+    const header = (type: number) => {
+      const buffer = Buffer.alloc(7)
+      buffer.writeUInt16BE(0xfefd)
+      buffer[2] = type
+      buffer.writeUInt32BE(session, 3)
+      return buffer
+    }
+    socket.on('message', (message) => {
+      if (message.length < 5 || message.readUInt32BE(1) !== session) return
+      if (message[0] === 0x09) {
+        const token = Number.parseInt(message.subarray(5).toString('latin1').split('\0')[0], 10)
+        if (!Number.isSafeInteger(token)) return resolve(undefined)
+        const request = Buffer.alloc(8)
+        request.writeInt32BE(token | 0)
+        return socket.send(Buffer.concat([header(0x00), request]), port, ip)
+      }
+      if (message[0] === 0x00 && message.length > 16) resolve(parseQuery(message.subarray(16)))
+    })
+    socket.on('error', () => resolve(undefined))
+    socket.send(header(0x09), port, ip)
+    return () => socket.close()
+  }).catch(() => undefined)
 }
 
 async function bedrockPing(target: ServerTarget, options: QueryOptions): Promise<ServerStatus> {
   const port = target.port ?? 19132
   const ip = await resolveAddress(target.host, options)
-  return abortable<ServerStatus>(options, ({ resolve, reject }) => {
+  const query = gs4Query(ip, port, options)
+  const status = await abortable<ServerStatus>(options, ({ resolve, reject }) => {
     const socket = createSocket(isIP(ip) === 6 ? 'udp6' : 'udp4')
     const started = Date.now()
     socket.on('message', (message) => {
@@ -239,6 +335,7 @@ async function bedrockPing(target: ServerTarget, options: QueryOptions): Promise
       const fields = message.subarray(35, 35 + length).toString('utf8').split(';')
       if (fields.length < 6) return reject(new QueryError('服务器返回了无效数据'))
       const motd: TextSegment[] = [...parseMotd(fields[1]), ...(fields[7] ? [{ text: '\n' }, ...parseMotd(fields[7])] : [])]
+      const number = (value: string | undefined) => Number.isSafeInteger(Number(value)) && Number(value) > 0 ? Number(value) : undefined
       resolve({
         edition: 'bedrock',
         host: target.host,
@@ -246,13 +343,19 @@ async function bedrockPing(target: ServerTarget, options: QueryOptions): Promise
         ip,
         latency: Date.now() - started,
         version: fields[3],
-        protocol: Number(fields[2]) || undefined,
-        online: Number(fields[4]) || 0,
-        max: Number(fields[5]) || 0,
+        protocol: number(fields[2]),
+        online: number(fields[4]) ?? 0,
+        max: number(fields[5]) ?? 0,
         players: [],
+        notes: [],
         motd,
+        mods: [],
         gamemode: fields[8] || undefined,
-        levelName: fields[7] || undefined
+        levelName: plainText(parseMotd(fields[7])) || undefined,
+        bedrockEdition: fields[0] || undefined,
+        serverId: fields[6] || undefined,
+        portV4: number(fields[10]),
+        portV6: number(fields[11])
       })
     })
     socket.on('error', () => reject(new QueryError('无法连接到服务器')))
@@ -261,15 +364,37 @@ async function bedrockPing(target: ServerTarget, options: QueryOptions): Promise
     socket.send(Buffer.concat([Buffer.from([0x01]), time, bedrockMagic, randomBytes(8)]), port, ip)
     return () => socket.close()
   })
+  return withQuery(status, await query)
 }
 
-/** Queries one edition, or both in parallel when `auto`, preferring Java when both answer. */
+function withQuery(status: ServerStatus, query: QueryDetails | undefined): ServerStatus {
+  if (!query) return status
+  return { ...status, query, software: status.software ?? (query.software ? detectSoftware(query.software) ?? query.software : undefined) }
+}
+
+/** Queries one edition, or both in parallel when `auto`. Java wins when it answers; a Bedrock answer waits briefly for Java. */
 export async function queryServer(target: ServerTarget, edition: Edition | 'auto', options: QueryOptions): Promise<ServerStatus> {
   if (edition === 'java') return javaPing(target, options)
   if (edition === 'bedrock') return bedrockPing(target, options)
-  const [java, bedrock] = await Promise.allSettled([javaPing(target, options), bedrockPing(target, options)])
-  if (java.status === 'fulfilled') return java.value
-  if (bedrock.status === 'fulfilled') return bedrock.value
-  // A guard rejection is the same for both editions and is more useful than a generic timeout.
-  throw java.reason instanceof QueryError ? java.reason : new QueryError('无法连接到服务器')
+  const controller = new AbortController()
+  const signal = AbortSignal.any([options.signal, controller.signal])
+  const java = javaPing(target, { ...options, signal })
+  const bedrock = bedrockPing(target, { ...options, signal })
+  try {
+    return await Promise.any([
+      java,
+      bedrock.then(async (status) => {
+        // Hybrid servers (Geyser) answer both; give Java a moment, but a dead Java port must not hold the reply.
+        const grace = new Promise<ServerStatus>((resolve) => setTimeout(resolve, bedrockGrace, status).unref())
+        return Promise.race([java.catch(() => status), grace])
+      })
+    ])
+  } catch {
+    options.signal.throwIfAborted()
+    // A guard rejection is the same for both editions and is more useful than a generic timeout.
+    const reason = await java.catch((error: unknown) => error)
+    throw reason instanceof QueryError ? reason : new QueryError('无法连接到服务器')
+  } finally {
+    controller.abort()
+  }
 }

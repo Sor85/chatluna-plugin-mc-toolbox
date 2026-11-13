@@ -10,6 +10,26 @@ export interface TextSegment {
   obfuscated?: boolean
 }
 
+export interface SamplePlayer {
+  name: string
+  /** Undashed UUID; absent for the zero UUID servers use to show text lines in the player list. */
+  id?: string
+}
+
+export interface ModInfo {
+  id: string
+  version?: string
+}
+
+/** Extra details from the GameSpy4 query protocol, only answered by servers with `enable-query`. */
+export interface QueryDetails {
+  software?: string
+  plugins: string[]
+  map?: string
+  gametype?: string
+  players: string[]
+}
+
 export interface ServerStatus {
   edition: Edition
   host: string
@@ -20,16 +40,30 @@ export interface ServerStatus {
   latency: number
   version: string
   protocol?: number
+  /** Release names that use `protocol`, filled from the protocol table when it is reachable. */
+  protocolName?: string
+  /** Server or proxy software recognized from the version name or the query response. */
+  software?: string
   online: number
   max: number
-  players: string[]
+  players: SamplePlayer[]
+  /** Text lines servers put in the player sample instead of players. */
+  notes: TextSegment[][]
   motd: TextSegment[]
   /** Validated `data:image/png;base64,` icon. */
   favicon?: string
-  mods?: number
+  modLoader?: string
+  mods: ModInfo[]
   secureChat?: boolean
+  preventsChatReports?: boolean
+  query?: QueryDetails
   gamemode?: string
   levelName?: string
+  /** Bedrock: `MCPE` or `MCEE` (Education Edition). */
+  bedrockEdition?: string
+  serverId?: string
+  portV4?: number
+  portV6?: number
 }
 
 export interface PlayerProfile {

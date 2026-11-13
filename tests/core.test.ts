@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { isPrivateAddress, parseTarget, QueryError } from '../src/server'
+import { detectSoftware, isPrivateAddress, parseQuery, parseTarget, QueryError } from '../src/server'
 import { parseMotd, plainText } from '../src/motd'
-import { parsePlayer, trustedImage } from '../src/mojang'
+import { parsePlayer, protocolNames, trustedImage } from '../src/mojang'
 import { decodeNode, escapeHtml, serverHtml } from '../src/render'
 import { fromHtml } from '@takumi-rs/helpers/html'
 import type { ServerStatus } from '../src/types'
@@ -84,11 +84,12 @@ describe('player input', () => {
 describe('card html', () => {
   const status: ServerStatus = {
     edition: 'java', host: 'mc.example.com', port: 25565, ip: '8.8.8.8', latency: 12, version: '1.21',
-    online: 1, max: 20, players: ['<img src=x>'], motd: [{ text: '<b>hi</b>', color: '#55ff55' }]
+    online: 1, max: 20, players: [{ name: 'Steve' }], notes: [[{ text: '<img src=x>' }]], mods: [],
+    motd: [{ text: '<b>hi</b>', color: '#55ff55' }]
   }
 
   it('keeps user text as text nodes after decoding', async () => {
-    const { node } = await fromHtml(serverHtml(status, undefined, 'Font'))
+    const { node } = await fromHtml(serverHtml(status, undefined, () => undefined, 'Font'))
     const texts: string[] = []
     const images: string[] = []
     const walk = (current: ReturnType<typeof decodeNode>) => {
@@ -101,5 +102,38 @@ describe('card html', () => {
     expect(texts).toContain('<img src=x>')
     expect(images.every((src) => src.startsWith('data:'))).toBe(true)
     expect(escapeHtml(`"'`)).toBe('&quot;&#39;')
+  })
+})
+
+describe('server details', () => {
+  it('recognizes server software from version names', () => {
+    expect(detectSoftware('Velocity 1.7.2-26.3')).toBe('Velocity')
+    expect(detectSoftware('Paper 1.21.4')).toBe('Paper')
+    expect(detectSoftware('pocketmine-mp 5')).toBe('PocketMine-MP')
+    expect(detectSoftware('Requires MC 1.8 / 1.21')).toBeUndefined()
+  })
+
+  it('parses a GameSpy4 full stat payload', () => {
+    const payload = Buffer.from([
+      'hostname', 'A Server', 'gametype', 'SMP', 'plugins', 'Paper on 1.21.4: LuckPerms 5.4; EssentialsX 2.20', 'map', 'world', 'numplayers', '2', '',
+      '\x01player_', '', 'Steve', 'Alex', '', ''
+    ].join('\0'))
+    expect(parseQuery(payload)).toEqual({
+      software: 'Paper on 1.21.4', plugins: ['LuckPerms 5.4', 'EssentialsX 2.20'], map: 'world', gametype: 'SMP', players: ['Steve', 'Alex']
+    })
+  })
+
+  it('names protocol numbers as release ranges', () => {
+    const names = protocolNames([
+      { minecraftVersion: '26.4-snapshot-7', version: 1073742169, releaseType: 'snapshot' },
+      { minecraftVersion: '26.3', version: 777, releaseType: 'release' },
+      { minecraftVersion: '26.3-rc-1', version: 777, releaseType: 'snapshot' },
+      { minecraftVersion: '1.21.10', version: 773, releaseType: 'release' },
+      { minecraftVersion: '1.21.9', version: 773, releaseType: 'release' },
+      { bad: true }
+    ])
+    expect(names.get(777)).toBe('26.3')
+    expect(names.get(773)).toBe('1.21.9–1.21.10')
+    expect(names.get(1073742169)).toBe('26.4-snapshot-7')
   })
 })

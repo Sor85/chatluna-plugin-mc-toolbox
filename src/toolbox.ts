@@ -2,7 +2,7 @@ import { h } from '@satorijs/core'
 import type { Context } from 'cordis'
 import type { Config, Output } from './config'
 import { LookupError, type MojangClient } from './mojang'
-import type { CardRenderer } from './render'
+import type { Avatar, CardRenderer } from './render'
 import { parseTarget, QueryError, queryServer } from './server'
 import { playerText, serverText, updateText, versionsText } from './text'
 import type { Edition, PlayerProfile, ServerStatus, VersionUpdate } from './types'
@@ -38,10 +38,17 @@ export class Toolbox {
     const targets = input === undefined || alias
       ? (alias ? [alias] : this.config.servers).map((server) => ({ label: server.name, address: server.address, edition: edition ?? server.edition }))
       : [{ label: undefined, address: input, edition: edition ?? this.config.edition }]
-    const options = { timeout: this.config.queryTimeout * 1000, allowPrivate: this.config.allowPrivate, signal }
+    const options = { timeout: this.config.queryTimeout * 1000, allowPrivate: this.config.allowPrivate, query: this.config.query, signal }
     return Promise.all(targets.slice(0, 10).map(async ({ label, address, edition }) => {
       try {
-        return { label, address, status: await queryServer(parseTarget(address), edition, options) }
+        const status = await queryServer(parseTarget(address), edition, options)
+        if (status.edition === 'bedrock' || status.protocol === undefined) return { label, address, status }
+        const protocolName = await this.mojang.protocolName(status.protocol).catch((error: unknown) => {
+          signal.throwIfAborted()
+          this.logger.debug('protocol table unavailable: %s', error)
+          return undefined
+        })
+        return { label, address, status: { ...status, protocolName } }
       } catch (error) {
         signal.throwIfAborted()
         return { label, address, error: errorMessage(error, this.logger) }
@@ -57,6 +64,13 @@ export class Toolbox {
     return this.config.renderer === 'crafatar'
       ? { body: `https://crafatar.com/renders/body/${profile.id}?overlay&scale=10`, head: `https://crafatar.com/avatars/${profile.id}?overlay&size=112` }
       : { body: `https://mc-heads.net/body/${profile.id}/240`, head: `https://mc-heads.net/avatar/${profile.id}/112` }
+  }
+
+  /** crafatar only serves UUIDs; mc-heads also accepts names, which the query protocol returns without UUIDs. */
+  avatar: Avatar = ({ name, id }) => {
+    if (this.config.renderer === 'crafatar') return id ? `https://crafatar.com/avatars/${id}?overlay&size=48` : undefined
+    const key = id ?? (/^[A-Za-z0-9_]{1,16}$/.test(name) ? name : undefined)
+    return key ? `https://mc-heads.net/avatar/${key}/48` : undefined
   }
 
   versions() {
@@ -88,7 +102,7 @@ export class Toolbox {
     const describe = ({ status, label, address, error }: ServerResult) => status ? serverText(status, label) : `${label ?? address}：${error}`
     if (output === 'text') return Promise.resolve([h.text(results.map(describe).join('\n\n'))])
     return Promise.all(results.map(({ status, label, address, error }) => status
-      ? this.present(output, serverText(status, label), () => this.renderer.server(status, label))
+      ? this.present(output, serverText(status, label), () => this.renderer.server(status, label, this.avatar))
       : h.text(describe({ label, address, error }))))
   }
 
