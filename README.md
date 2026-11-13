@@ -44,17 +44,6 @@ ChatLuna v2 的 Minecraft 工具箱：服务器状态查询、Java 版玩家信�
 - 玩家查询只支持 Java 版正版账号。全身渲染图与玩家头像来自第三方渲染服务，不可用时卡片显示占位色块；查询玩家自身的头像与皮肤贴图直接取自 Mojang 材质服务器。
 - 播报状态保存在 `data/chatluna/mc-toolbox/versions.json`。机器人离线时消息由宿主暂存，最长 6 小时。
 
-## 开发
-
-源码不安装依赖，同步到 ChatLuna v2 的 `external/mc-toolbox` 后在宿主中构建与测试：
-
-```sh
-node scripts/sync-to-v2.mjs --once
-cd ../../chatluna-v2-mirror && yarn install && yarn yakumo build mc-toolbox
-cd external/mc-toolbox && yarn typecheck && yarn test
-SANDBOX_TOKEN=<令牌> node scripts/sandbox-test.mjs
-```
-
 ## 许可
 
 MIT。卡片图标来自 [Tabler Icons](https://tabler.io/icons)（MIT）。
