@@ -1,0 +1,89 @@
+{
+  "name": "chatluna-plugin-mc-toolbox",
+  "version": "0.0.1",
+  "description": "Minecraft 工具箱：服务器状态查询、玩家信息查询与 Java 版更新播报，支持文字或图片输出",
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Sor85/chatluna-plugin-mc-toolbox.git"
+  },
+  "homepage": "https://github.com/Sor85/chatluna-plugin-mc-toolbox#readme",
+  "bugs": {
+    "url": "https://github.com/Sor85/chatluna-plugin-mc-toolbox/issues"
+  },
+  "keywords": [
+    "chatluna-plugin",
+    "minecraft",
+    "mc",
+    "server",
+    "status"
+  ],
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "sync": "node scripts/sync-to-v2.mjs --once",
+    "sync:watch": "node scripts/sync-to-v2.mjs",
+    "build": "yakumo build",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@fontsource-variable/noto-sans-sc": "5.2.10",
+    "@fontsource/dejavu-sans": "5.2.5",
+    "@takumi-rs/core": "1.8.7",
+    "@takumi-rs/helpers": "1.8.7"
+  },
+  "peerDependencies": {
+    "@chatluna/satori": ">=2.0.0-alpha.0",
+    "@chatluna/schema": ">=2.0.0-alpha.0",
+    "@chatluna/utils": ">=2.0.0-alpha.0",
+    "@satorijs/core": "~4.6.1",
+    "cordis": "^4.0.0-rc.12"
+  },
+  "devDependencies": {
+    "@chatluna/chat": "workspace:*",
+    "@chatluna/satori": "workspace:*",
+    "@chatluna/schema": "workspace:*",
+    "@chatluna/tool": "workspace:*",
+    "@chatluna/utils": "workspace:*",
+    "@cordisjs/plugin-http": "^1.5.2",
+    "@satorijs/core": "~4.6.1",
+    "@types/node": "^24.0.0",
+    "cordis": "4.0.0-rc.12",
+    "koishi": "npm:@koishijs/core@4.18.11",
+    "typescript": "7.0.2",
+    "vitest": "^3.2.4"
+  },
+  "cordis": {
+    "description": {
+      "zh": "Minecraft 服务器查询、玩家信息查询与版本更新播报",
+      "en": "Minecraft server status, player profiles and version update broadcasts"
+    },
+    "service": {
+      "required": [
+        "http",
+        "koishi",
+        "chat"
+      ],
+      "optional": [
+        "tools"
+      ]
+    }
+  }
+}
