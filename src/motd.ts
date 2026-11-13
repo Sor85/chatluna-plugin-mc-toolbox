@@ -74,3 +74,33 @@ export function parseMotd(value: unknown): TextSegment[] {
 export function plainText(segments: TextSegment[]): string {
   return segments.map((segment) => segment.text).join('')
 }
+
+function sliceSegments(segments: TextSegment[], start: number, end: number): TextSegment[] {
+  let offset = 0
+  return segments.flatMap((segment) => {
+    const from = offset
+    offset += segment.text.length
+    const text = segment.text.slice(Math.max(0, start - from), Math.max(0, end - from))
+    return text ? [{ ...segment, text }] : []
+  })
+}
+
+function trimSegments(segments: TextSegment[]): TextSegment[] {
+  const text = plainText(segments)
+  const start = text.length - text.trimStart().length
+  return sliceSegments(segments, start, text.trimEnd().length)
+}
+
+/** Splits a `key: value` (or `key > value`) line of server info into a labelled entry, keeping colors; other lines stay a plain item. */
+export function noteEntry(line: TextSegment[]): { key?: TextSegment[]; value: TextSegment[] } {
+  const text = plainText(line)
+  const separator = /\s*[:：]\s*|\s+[>»]\s+/.exec(text)
+  const key = separator ? text.slice(0, separator.index).trim() : ''
+  const rest = separator ? text.slice(separator.index + separator[0].length).trim() : ''
+  // `https://…` is a link, not a label; long or empty halves are a sentence that happens to contain a colon.
+  if (!separator || !key || !rest || Array.from(key).length > 32 || /^https?$/i.test(key)) return { value: trimSegments(line) }
+  return {
+    key: trimSegments(sliceSegments(line, 0, separator.index)),
+    value: trimSegments(sliceSegments(line, separator.index + separator[0].length, text.length))
+  }
+}

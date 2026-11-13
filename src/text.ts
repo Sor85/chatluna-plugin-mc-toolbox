@@ -1,6 +1,7 @@
 import { formatUuid } from './mojang'
 import { daysAgo, formatTime, isFakeIp, serverAddress } from './render'
 import { plainText } from './motd'
+import { classifyNote, noteText } from './notes'
 import type { PlayerProfile, ServerStatus, VersionEntry, VersionUpdate } from './types'
 
 function limited(items: string[], limit: number): string {
@@ -10,7 +11,7 @@ function limited(items: string[], limit: number): string {
 export function serverText(status: ServerStatus, label?: string): string {
   const motd = plainText(status.motd).split('\n').map((line) => line.trim()).filter(Boolean).join('\n')
   const players = status.query?.players.length ? status.query.players : status.players.map((player) => player.name)
-  const notes = status.notes.map((line) => plainText(line).trim()).filter(Boolean)
+  const notes = status.notes.map((line) => `· ${noteText(classifyNote(line))}`)
   return [
     `【${label ?? serverAddress(status)}】${status.edition === 'java' ? 'Java 版' : '基岩版'} · 在线`,
     ...label ? [`地址：${serverAddress(status)}`] : [],

@@ -13,6 +13,7 @@ ChatLuna v2 的 Minecraft 工具箱：服务器状态查询、Java 版玩家信�
 所有指令支持 `-t` 输出文字、`-i` 输出图片，未指定时使用配置中的「默认输出」。
 
 - **服务器查询**直接实现 Java 版 Server List Ping 与基岩版 RakNet Ping，不依赖第三方查询 API。支持 `_minecraft._tcp` SRV 记录、`host:port` 与 `[IPv6]:port`。
+  - 服务器写在玩家列表里的说明会整理成「服务器信息」：常见键名译成中文，在线、排队等数量显示为指标卡片，Discord、官网、商店等链接配对应图标。
   - Java 版：识别 Paper、Velocity 等服务端，协议号对照 [PrismarineJS minecraft-data](https://github.com/PrismarineJS/minecraft-data) 显示游戏版本（每日更新，获取失败时只显示协议号），列出 Forge/NeoForge 模组、在线玩家头像、服务器写在玩家列表里的说明文字、安全聊天与 NoChatReports 状态。
   - 基岩版：游戏模式、世界名称、服务器 ID、IPv4/IPv6 端口，教育版服务器单独标注。
   - 服务器开启 `enable-query` 时，额外通过 Query 协议获取完整玩家列表、插件列表、地图与服务端。

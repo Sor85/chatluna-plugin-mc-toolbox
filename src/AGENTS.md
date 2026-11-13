@@ -7,7 +7,7 @@
 - 保留网段不含 `198.18.0.0/15`（代理 fake-ip 网段，宿主开发机即在此环境），也不能加入 `::ffff:0:0/96`：Node `BlockList` 的这条规则会匹配所有 IPv4。映射地址在 `isPrivateAddress` 中拆出 IPv4 再判断。
 - 协议响应有包大小上限与超时；`abortable` 保证每次查询只结算一次并清理 socket。favicon 仅接受 `data:image/png;base64,` 且限长。
 - Java 握手发送协议号 `-1`：发送具体协议号时，Velocity、Hypixel 等代理会原样回显，协议号失去意义。只有 `forgeData` 或非空模组列表才算模组服，CubeCraft 等代理会伪造空的 `FML` 标记。
-- 玩家样本中 UUID 为全零或名称不是合法玩家名的条目是服务器说明文字，归入 `notes` 并保留颜色。
+- 玩家样本中 UUID 为全零或名称不是合法玩家名的条目是服务器说明文字，归入 `notes` 并保留颜色。`notes.ts` 的 `classifyNote` 先用 `noteEntry` 拆出 `键: 值` / `键 > 值`，再按内置对照表把常见键名译成中文并归类：数量值做成指标卡片，域名或链接按键名或域名配品牌图标，联系方式等编号不算数量；开头的无标签行作为标题。未识别的键名原样保留，不猜测翻译。
 - GameSpy4 Query（`gs4Query`）与状态查询并行、尽力而为：超时 1.5 秒，失败返回 `undefined`，不影响主结果；可由配置关闭。
 - `auto` 模式 Java 版成功即返回并取消基岩版；基岩版先成功时最多再等 Java 版 `bedrockGrace` 毫秒，避免 fake-ip 环境下 Java 端口挂起拖住回复。
 - 协议号对照表来自 PrismarineJS minecraft-data，`MojangClient.protocolName` 内存缓存一天，失败下次重试；卡片和文字只在有结果时显示版本名。

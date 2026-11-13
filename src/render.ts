@@ -5,6 +5,8 @@ import { h } from '@satorijs/core'
 import { extractResourceUrls, type ImageSource, type Node, Renderer } from '@takumi-rs/core'
 import { fromHtml } from '@takumi-rs/helpers/html'
 import { formatUuid, type MojangClient } from './mojang'
+import { plainText } from './motd'
+import { classifyNote, type NoteCategory, type NoteItem } from './notes'
 import type { PlayerProfile, ServerStatus, TextSegment, VersionEntry, VersionUpdate } from './types'
 
 const width = 680
@@ -32,6 +34,27 @@ const icons = {
   message: '<path d="M8 9h8"/><path d="M8 13h6"/><path d="M18 4a3 3 0 0 1 3 3v8a3 3 0 0 1 -3 3h-5l-5 3v-3h-2a3 3 0 0 1 -3 -3v-8a3 3 0 0 1 3 -3h12"/>',
   route: '<path d="M3 19a2 2 0 1 0 4 0a2 2 0 0 0 -4 0"/><path d="M19 7a2 2 0 1 0 0 -4a2 2 0 0 0 0 4"/><path d="M11 19h5.5a3.5 3.5 0 0 0 0 -7h-8a3.5 3.5 0 0 1 0 -7h4.5"/>',
   sparkles: '<path d="M16 18a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2m0 -12a2 2 0 0 1 2 2a2 2 0 0 1 2 -2a2 2 0 0 1 -2 -2a2 2 0 0 1 -2 2m-7 12a6 6 0 0 1 6 -6a6 6 0 0 1 -6 -6a6 6 0 0 1 -6 6a6 6 0 0 1 6 6"/>',
+  gamepad: '<path d="M12 5h3.5a5 5 0 0 1 0 10h-5.5l-4.015 4.227a2.3 2.3 0 0 1 -3.923 -2.035l1.634 -8.173a5 5 0 0 1 4.904 -4.019h3.4"/><path d="M14 15l4.07 4.284a2.3 2.3 0 0 0 3.925 -2.023l-1.6 -8.232"/><path d="M8 9v2"/><path d="M7 10h2"/><path d="M14 10h2"/>',
+  hourglass: '<path d="M6.5 7h11"/><path d="M6.5 17h11"/><path d="M6 20v-2a6 6 0 1 1 12 0v2a1 1 0 0 1 -1 1h-10a1 1 0 0 1 -1 -1"/><path d="M6 4v2a6 6 0 1 0 12 0v-2a1 1 0 0 0 -1 -1h-10a1 1 0 0 0 -1 1"/>',
+  crown: '<path d="M12 6l4 6l5 -4l-2 10h-14l-2 -10l5 4l4 -6"/>',
+  discord: '<path d="M8 12a1 1 0 1 0 2 0a1 1 0 0 0 -2 0"/><path d="M14 12a1 1 0 1 0 2 0a1 1 0 0 0 -2 0"/><path d="M15.5 17c0 1 1.5 3 2 3c1.5 0 2.833 -1.667 3.5 -3c.667 -1.667 .5 -5.833 -1.5 -11.5c-1.457 -1.015 -3 -1.34 -4.5 -1.5l-.972 1.923a11.913 11.913 0 0 0 -4.053 0l-.975 -1.923c-1.5 .16 -3.043 .485 -4.5 1.5c-2 5.667 -2.167 9.833 -1.5 11.5c.667 1.333 2 3 3.5 3c.5 0 2 -2 2 -3"/><path d="M7 16.5c3.5 1 6.5 1 10 0"/>',
+  x: '<path d="M4 4l11.733 16h4.267l-11.733 -16l-4.267 0"/><path d="M4 20l6.768 -6.768m2.46 -2.46l6.772 -6.772"/>',
+  youtube: '<path d="M2 8a4 4 0 0 1 4 -4h12a4 4 0 0 1 4 4v8a4 4 0 0 1 -4 4h-12a4 4 0 0 1 -4 -4v-8"/><path d="M10 9l5 3l-5 3l0 -6"/>',
+  tiktok: '<path d="M21 7.917v4.034a9.948 9.948 0 0 1 -5 -1.951v4.5a6.5 6.5 0 1 1 -8 -6.326v4.326a2.5 2.5 0 1 0 4 2v-11.5h4.083a6.005 6.005 0 0 0 4.917 4.917"/>',
+  instagram: '<path d="M3 7a4 4 0 0 1 4 -4h10a4 4 0 0 1 4 4v10a4 4 0 0 1 -4 4h-10a4 4 0 0 1 -4 -4l0 -10"/><path d="M8.5 12a3.5 3.5 0 1 0 7 0a3.5 3.5 0 0 0 -7 0"/><path d="M17 7v.01"/>',
+  telegram: '<path d="M15 10l-4 4l6 6l4 -16l-18 7l4 2l2 6l3 -4"/>',
+  qq: '<path d="M6 9.748a14.716 14.716 0 0 0 11.995 -.052c.275 -9.236 -11.104 -11.256 -11.995 .052"/><path d="M18 10c.984 2.762 1.949 4.765 2 7.153c.014 .688 -.664 1.346 -1.184 .303c-.346 -.696 -.952 -1.181 -1.816 -1.456"/><path d="M17 16c.031 1.831 .147 3.102 -1 4"/><path d="M8 20c-1.099 -.87 -.914 -2.24 -1 -4"/><path d="M6 10c-.783 2.338 -1.742 4.12 -1.968 6.43c-.217 2.227 .716 1.644 1.16 .917c.296 -.487 .898 -.934 1.808 -1.347"/><path d="M15.898 13l-.476 -2"/><path d="M8 20l-1.5 1c-.5 .5 -.5 1 .5 1h10c1 0 1 -.5 .5 -1l-1.5 -1"/><path d="M12.75 7a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"/><path d="M9.25 7a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"/>',
+  bilibili: '<path d="M3 10a4 4 0 0 1 4 -4h10a4 4 0 0 1 4 4v6a4 4 0 0 1 -4 4h-10a4 4 0 0 1 -4 -4v-6"/><path d="M8 3l2 3"/><path d="M16 3l-2 3"/><path d="M9 13v-2"/><path d="M15 11v2"/>',
+  cart: '<path d="M4 19a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"/><path d="M15 19a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"/><path d="M17 17h-11v-14h-2"/><path d="M6 5l14 1l-1 7h-13"/>',
+  messages: '<path d="M21 14l-3 -3h-7a1 1 0 0 1 -1 -1v-6a1 1 0 0 1 1 -1h9a1 1 0 0 1 1 1v10"/><path d="M14 15v2a1 1 0 0 1 -1 1h-7l-3 3v-10a1 1 0 0 1 1 -1h2"/>',
+  gavel: '<path d="M13 10l7.383 7.418c.823 .82 .823 2.148 0 2.967a2.11 2.11 0 0 1 -2.976 0l-7.407 -7.385"/><path d="M6 9l4 4"/><path d="M13 10l-4 -4"/><path d="M3 21h7"/><path d="M6.793 15.793l-3.586 -3.586a1 1 0 0 1 0 -1.414l2.293 -2.293l.5 .5l3 -3l-.5 -.5l2.293 -2.293a1 1 0 0 1 1.414 0l3.586 3.586a1 1 0 0 1 0 1.414l-2.293 2.293l-.5 -.5l-3 3l.5 .5l-2.293 2.293a1 1 0 0 1 -1.414 0"/>',
+  book: '<path d="M3 19a9 9 0 0 1 9 0a9 9 0 0 1 9 0"/><path d="M3 6a9 9 0 0 1 9 0a9 9 0 0 1 9 0"/><path d="M3 6l0 13"/><path d="M12 6l0 13"/><path d="M21 6l0 13"/>',
+  thumb: '<path d="M7 11v8a1 1 0 0 1 -1 1h-2a1 1 0 0 1 -1 -1v-7a1 1 0 0 1 1 -1h3a4 4 0 0 0 4 -4v-1a2 2 0 0 1 4 0v5h3a2 2 0 0 1 2 2l-1 5a2 3 0 0 1 -2 2h-7a3 3 0 0 1 -3 -3"/>',
+  mail: '<path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10"/><path d="M3 7l9 6l9 -6"/>',
+  help: '<path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0"/><path d="M12 16v.01"/><path d="M12 13a2 2 0 0 0 .914 -3.782a1.98 1.98 0 0 0 -2.414 .483"/>',
+  clock: '<path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0"/><path d="M12 7v5l3 3"/>',
+  trophy: '<path d="M8 21l8 0"/><path d="M12 17l0 4"/><path d="M7 4l10 0"/><path d="M17 4v8a5 5 0 0 1 -10 0v-8"/><path d="M3 9a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"/><path d="M17 9a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"/>',
+  info: '<path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0"/><path d="M12 9h.01"/><path d="M11 12h1v4h1"/>',
   cube: '<path d="M21 16.008v-8.018a1.98 1.98 0 0 0 -1 -1.717l-7 -4.008a2.016 2.016 0 0 0 -2 0l-7 4.008c-.619 .355 -1 1.01 -1 1.718v8.018c0 .709 .381 1.363 1 1.717l7 4.008a2.016 2.016 0 0 0 2 0l7 -4.008c.619 -.355 1 -1.01 1 -1.718"/><path d="M12 22v-10"/><path d="M12 12l8.73 -5.04"/><path d="M3.27 6.96l8.73 5.04"/>'
 }
 
@@ -116,6 +139,45 @@ function skinCrop(texture: string, x: number, y: number, w: number, h: number, s
 function pixelHead(texture: string, size: number): string {
   const scale = size / 8
   return `<div class="pixel-head" style="width: ${size}px; height: ${size}px">${skinCrop(texture, 8, 8, 8, 8, scale)}${skinCrop(texture, 40, 8, 8, 8, scale, 'position: absolute; left: 0; top: 0')}</div>`
+}
+
+const noteStyles: Record<NoteCategory, [keyof typeof icons, string]> = {
+  game: ['gamepad', '#6cc04a'], queue: ['hourglass', '#f5b942'], priority: ['crown', '#ffd166'], players: ['users', '#82aaff'],
+  discord: ['discord', '#8c9eff'], twitter: ['x', '#e7e9ea'], youtube: ['youtube', '#ff5c57'], tiktok: ['tiktok', '#25f4ee'],
+  instagram: ['instagram', '#f06292'], telegram: ['telegram', '#4fc3f7'], qq: ['qq', '#4fc3f7'], bilibili: ['bilibili', '#fb7299'],
+  store: ['cart', '#f5b942'], forums: ['messages', '#82aaff'], rules: ['gavel', '#f78c6c'], website: ['world', '#6cc04a'],
+  wiki: ['book', '#c792ea'], vote: ['thumb', '#6cc04a'], mail: ['mail', '#82aaff'], support: ['help', '#82aaff'],
+  version: ['versions', '#82aaff'], map: ['map', '#6cc04a'], time: ['clock', '#82aaff'], event: ['calendar', '#f78c6c'],
+  staff: ['shield', '#c792ea'], rank: ['trophy', '#f5b942'], info: ['info', '#8b8e96']
+}
+
+/** Numbers become tiles, labelled values and links become list rows, unlabelled lines are centered like a heading. */
+function notesHtml(notes: TextSegment[][]): string {
+  const items = notes.slice(0, 16).map(classifyNote)
+  // Unlabelled lines before the first labelled one read as the block's title.
+  const lead = items.findIndex((item) => item.kind !== 'line')
+  const headings = lead < 0 ? [] : items.slice(0, lead)
+  const rest = lead < 0 ? items : items.slice(lead)
+  const metrics = rest.filter((item) => item.kind === 'metric')
+  const rows = rest.filter((item) => item.kind !== 'metric')
+  const columns = Math.min(metrics.length, 4)
+  const tileWidth = Math.floor((620 - 10 * (columns - 1)) / Math.max(columns, 1))
+  const tile = (item: NoteItem) => {
+    const [name, color] = noteStyles[item.category]
+    return `<div class="metric" style="width: ${tileWidth}px; border-color: ${color}33; background-image: linear-gradient(160deg, ${color}1f, rgba(26, 27, 31, 0) 70%)">
+      <div class="metric-label">${icon(name, color, 16)}<span>${escapeHtml(clipped(item.label ?? '', 16))}</span></div>
+      <div class="metric-value" style="font-size: ${plainText(item.value).trim().length > 7 ? 20 : 26}px">${escapeHtml(clipped(plainText(item.value).trim(), 14))}</div>
+    </div>`
+  }
+  const row = (item: NoteItem) => {
+    if (item.kind === 'line') return `<div class="note note-line">${motdHtml(item.value, '#ecedef')}</div>`
+    const [name, color] = noteStyles[item.category]
+    const value = item.kind === 'link'
+      ? `<span class="note-value" style="color: ${color}">${escapeHtml(clipped(plainText(item.value).trim().replace(/^https?:\/\//, ''), 48))}</span>`
+      : `<span class="note-value">${motdHtml(item.value, '#ecedef')}</span>`
+    return `<div class="note"><div class="note-icon" style="background-color: ${color}1f">${icon(name, color, 17)}</div><span class="note-key">${escapeHtml(clipped(item.label ?? '', 20))}</span>${value}</div>`
+  }
+  return `${headings.length ? `<div class="note-heading">${headings.map((item) => `<div>${motdHtml(item.value, '#ecedef')}</div>`).join('')}</div>` : ''}${metrics.length ? `<div class="metrics">${metrics.map(tile).join('')}</div>` : ''}${rows.length ? `<div class="notes">${rows.map(row).join('')}</div>` : ''}`
 }
 
 const baseStyle = (fontFamily: string) => `
@@ -259,7 +321,17 @@ export function serverHtml(status: ServerStatus, label: string | undefined, avat
 .player-head { width: 22px; height: 22px; border-radius: 5px; background-color: #2f3036; }
 .player-more { padding: 4px 10px; color: #8b8e96; }
 .soft { color: #8b8e96; font-weight: 500; }
-.tooltip { display: flex; flex-direction: column; padding: 12px 16px; border: 2px solid #3d1a8a; border-radius: 10px; background-color: #120a1c; font-size: 15px; line-height: 1.6; }
+.metrics { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
+.metric { display: flex; flex-direction: column; padding: 14px 16px; border: 1px solid; border-radius: 14px; background-color: #1a1b1f; }
+.metric-label { display: flex; align-items: center; gap: 6px; color: #a3a6ad; font-size: 13px; }
+.metric-value { margin-top: 6px; line-height: 1.2; font-weight: 800; word-break: break-all; }
+.notes { display: flex; flex-direction: column; gap: 4px; padding: 8px; border: 1px solid rgba(255, 255, 255, .06); border-radius: 16px; background-color: #1a1b1f; font-size: 15px; }
+.note { display: flex; align-items: center; gap: 12px; padding: 7px 10px 7px 7px; border-radius: 10px; background-color: #1f2025; }
+.note-icon { display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0; }
+.note-key { flex-shrink: 0; color: #c9cbd0; font-weight: 600; }
+.note-value { flex: 1; min-width: 0; text-align: right; font-weight: 600; word-break: break-all; }
+.note-heading { display: flex; flex-direction: column; align-items: center; margin-bottom: 12px; padding: 12px 16px; border: 1px solid rgba(255, 255, 255, .06); border-radius: 14px; background-image: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, .05), rgba(255, 255, 255, 0)); font-size: 17px; font-weight: 700; text-align: center; }
+.note-line { justify-content: center; padding: 8px 10px; background-color: transparent; font-weight: 700; text-align: center; }
 </style>
 <main class="card">
   ${status.favicon ? `<img class="hero-bg" src="${status.favicon}" />` : `<div class="hero-bg" style="background-image: radial-gradient(circle, ${accent}88, transparent 70%)"></div>`}
@@ -292,7 +364,7 @@ export function serverHtml(status: ServerStatus, label: string | undefined, avat
       ${playerList}
     </div>
     <div class="fields">${fields.join('')}</div>
-    ${status.notes.length ? section('message', '服务器信息', `<div class="tooltip">${status.notes.slice(0, 12).map((line) => `<div>${motdHtml(line, '#aaaaaa')}</div>`).join('')}</div>`) : ''}
+    ${status.notes.length ? section('message', '服务器信息', notesHtml(status.notes)) : ''}
     ${status.mods.length ? section('package', '模组', chips(status.mods.map((mod) => mod.version && mod.version !== 'ANY' ? `${mod.id} ${mod.version}` : mod.id), 40), `${status.mods.length} 个`) : ''}
     ${status.query?.plugins.length ? section('plug', '插件', chips(status.query.plugins, 40), `${status.query.plugins.length} 个`) : ''}
   </section>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { detectSoftware, isPrivateAddress, parseQuery, parseTarget, QueryError } from '../src/server'
-import { parseMotd, plainText } from '../src/motd'
+import { noteEntry, parseMotd, plainText } from '../src/motd'
 import { parsePlayer, protocolNames, trustedImage } from '../src/mojang'
 import { decodeNode, escapeHtml, serverHtml } from '../src/render'
 import { fromHtml } from '@takumi-rs/helpers/html'
@@ -49,6 +49,17 @@ describe('motd', () => {
       { color: '#123abc', bold: true, text: 'C' }
     ])
     expect(plainText(segments)).toBe('ABC')
+  })
+
+  it('splits key: value info lines and keeps colors', () => {
+    const entry = noteEntry(parseMotd('§6In-game: §a516 '))
+    expect(entry.key).toEqual([{ color: '#ffaa00', text: 'In-game' }])
+    expect(entry.value).toEqual([{ color: '#55ff55', text: '516' }])
+    expect(plainText(noteEntry(parseMotd('§7官网：§bexample.com')).value)).toBe('example.com')
+    expect(noteEntry(parseMotd('https://example.com')).key).toBeUndefined()
+    expect(plainText(noteEntry(parseMotd('§6Forums §f> cubecraft.net')).key ?? [])).toBe('Forums')
+    expect(noteEntry(parseMotd('a>b')).key).toBeUndefined()
+    expect(noteEntry(parseMotd('  欢迎来到测试服 ')).value).toEqual([{ text: '欢迎来到测试服' }])
   })
 
   it('ignores invalid colors and bounds recursion', () => {
