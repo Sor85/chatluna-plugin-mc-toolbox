@@ -79,7 +79,7 @@ try {
   const character = wakeup.scopes?.some((scope) => scope.responders?.some((responder) => responder.engine === 'character'))
   await call('create_test_preset', {
     presetId: state.presetId, loader: character ? 'character-md' : 'md',
-    text: `---\n${character ? 'kind: character\n' : ''}name: MC工具箱测试\ndescription: MC 工具箱 AI 工具验收\n${character ? 'nick: [MC验收机器人]\n' : 'tools:\n  allow: [mc_server_status, mc_player_profile, mc_latest_version, reply, run_code, tool_search]\n'}---\n你是插件测试机器人。用户要求查询 Minecraft 服务器时，必须实际调用 mc_server_status 工具，不凭记忆回答；若工具通过 run_code 提供，调用 tools.mc_server_status。拿到结果后用一句中文报告在线人数。\n`
+    text: `---\n${character ? 'kind: character\n' : ''}name: MC工具箱测试\ndescription: MC 工具箱 AI 工具验收\n${character ? 'nick: [MC验收机器人]\n' : 'tools:\n  allow: [mc_server_status, mc_player_profile, reply, run_code, tool_search]\n'}---\n你是插件测试机器人。用户要求查询 Minecraft 服务器时，必须实际调用 mc_server_status 工具，不凭记忆回答；若工具通过 run_code 提供，调用 tools.mc_server_status。拿到结果后用一句中文报告在线人数。\n`
   })
   presetCreated = true
   await call('set_bot_preset', { botId: state.botId, presetId: state.presetId })

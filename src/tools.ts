@@ -85,16 +85,4 @@ export function registerTools(ctx: Context, config: Config, toolbox: Toolbox, li
       }
     }
   })
-
-  ctx.tools.define({
-    name: 'mc_latest_version',
-    description: 'Get the latest Minecraft Java Edition release and snapshot versions from the official Mojang manifest.',
-    locales: { zh: { description: '从 Mojang 官方版本清单获取 Minecraft Java 版最新正式版与快照。' } },
-    args: Schema.object({}),
-    traits: { effect: 'read', parallel: true, background: false, timeout: 30000 },
-    async run() {
-      const { release, snapshot } = await toolbox.versions()
-      return { release, snapshot }
-    }
-  })
 }
