@@ -1,6 +1,6 @@
 {
   "name": "chatluna-plugin-mc-toolbox",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Minecraft 工具箱：服务器状态查询、玩家信息查询与 Java 版更新播报，支持文字或图片输出",
   "type": "module",
   "license": "MIT",
