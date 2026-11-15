@@ -56,7 +56,8 @@ run('node', [path.join(source, 'scripts', 'sync-to-v2.mjs'), '--once'])
 // tsbuildinfo 一并删除：它还在时 tsc 认为产物已是最新，清空 lib 后不再生成类型声明。
 for (const entry of ['lib', 'dist', 'tsconfig.tsbuildinfo']) fs.rmSync(path.join(target, entry), { recursive: true, force: true })
 run('yarn', ['yakumo', 'build', 'mc-toolbox'], v2Root)
-run(path.join(v2Root, 'node_modules', '.bin', 'vitest'), ['run'], target)
+// 用插件自己声明的 vitest；宿主根目录的 vitest 大版本可能不同。
+run('yarn', ['test'], target)
 
 // yarn pack 把 workspace:* 改写成具体版本，npm pack 不会。
 const workdir = fs.mkdtempSync(path.join(os.tmpdir(), 'mc-toolbox-'))
