@@ -43,17 +43,12 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
     "test": "vitest run"
   },
-  "dependencies": {
-    "@fontsource-variable/noto-sans-sc": "5.2.10",
-    "@fontsource/dejavu-sans": "5.2.5",
-    "@takumi-rs/core": "1.8.7",
-    "@takumi-rs/helpers": "1.8.7"
-  },
   "peerDependencies": {
     "@chatluna/satori": ">=2.0.0-alpha.0",
     "@chatluna/schema": ">=2.0.0-alpha.0",
     "@chatluna/utils": ">=2.0.0-alpha.0",
     "@satorijs/core": "~4.6.1",
+    "chatluna-plugin-takumi": "^0.0.1",
     "cordis": "^4.0.0-rc.12"
   },
   "devDependencies": {
@@ -65,6 +60,7 @@
     "@cordisjs/plugin-http": "^1.5.2",
     "@satorijs/core": "~4.6.1",
     "@types/node": "^24.0.0",
+    "chatluna-plugin-takumi": "workspace:*",
     "cordis": "4.0.0-rc.12",
     "koishi": "npm:@koishijs/core@4.18.11",
     "typescript": "7.0.2",
@@ -82,7 +78,8 @@
         "chat"
       ],
       "optional": [
-        "tools"
+        "tools",
+        "takumi"
       ]
     }
   }

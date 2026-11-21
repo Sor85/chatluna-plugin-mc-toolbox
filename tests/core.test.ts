@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { detectSoftware, isPrivateAddress, parseQuery, parseTarget, QueryError } from '../src/server'
 import { noteEntry, parseMotd, plainText } from '../src/motd'
 import { parsePlayer, protocolNames, trustedImage } from '../src/mojang'
-import { decodeNode, escapeHtml, serverHtml } from '../src/render'
-import { fromHtml } from '@takumi-rs/helpers/html'
+import { type Node, parseHtml } from 'chatluna-plugin-takumi'
+import { escapeHtml, serverHtml } from '../src/render'
 import type { ServerStatus } from '../src/types'
 
 describe('server address', () => {
@@ -100,15 +100,15 @@ describe('card html', () => {
   }
 
   it('keeps user text as text nodes after decoding', async () => {
-    const { node } = await fromHtml(serverHtml(status, undefined, () => undefined, 'Font'))
+    const { node } = parseHtml(serverHtml(status, undefined, () => undefined, 'Font'))
     const texts: string[] = []
     const images: string[] = []
-    const walk = (current: ReturnType<typeof decodeNode>) => {
+    const walk = (current: Node) => {
       if (current.type === 'text') texts.push(current.text)
       if (current.type === 'image' && typeof current.src === 'string') images.push(current.src)
       if ('children' in current) current.children?.forEach((child) => child && walk(child))
     }
-    walk(decodeNode(node))
+    walk(node)
     expect(texts).toContain('<b>hi</b>')
     expect(texts).toContain('<img src=x>')
     expect(images.every((src) => src.startsWith('data:'))).toBe(true)

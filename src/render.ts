@@ -1,9 +1,4 @@
-import { createRequire } from 'node:module'
-import { readdirSync, readFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
-import { h } from '@satorijs/core'
-import { extractResourceUrls, type ImageSource, type Node, Renderer } from '@takumi-rs/core'
-import { fromHtml } from '@takumi-rs/helpers/html'
+import type Takumi from 'chatluna-plugin-takumi'
 import { formatUuid, type MojangClient } from './mojang'
 import { plainText } from './motd'
 import { classifyNote, type NoteCategory, type NoteItem } from './notes'
@@ -215,32 +210,16 @@ function footer(label: string): string {
 }
 
 export class CardRenderer {
-  private engine?: { renderer: Renderer; fontFamily: string }
-
-  constructor(private client: Pick<MojangClient, 'image'>, private signal: AbortSignal) {}
-
-  private getEngine() {
-    if (this.engine) return this.engine
-    const require = createRequire(import.meta.url)
-    const fonts = ['@fontsource-variable/noto-sans-sc', '@fontsource/dejavu-sans'].flatMap((pkg, i) => {
-      const directory = resolve(dirname(require.resolve(`${pkg}/package.json`)), 'files')
-      return readdirSync(directory).filter((name) => name.endsWith('.woff2')).sort().map((name, j) => ({
-        name: `McFont${i}_${j}`, data: readFileSync(resolve(directory, name))
-      }))
-    })
-    return this.engine = { renderer: new Renderer({ fonts, loadDefaultFonts: true }), fontFamily: fonts.map((font) => `'${font.name}'`).join(',') }
-  }
+  /** `takumi` is optional: read it per render so the cards return as soon as the service is enabled. */
+  constructor(private takumi: () => Pick<Takumi, 'render' | 'fontFamily'> | undefined, private client: Pick<MojangClient, 'image'>, private signal: AbortSignal) {}
 
   private async render(html: (fontFamily: string) => string): Promise<Buffer> {
-    this.signal.throwIfAborted()
-    const { renderer, fontFamily } = this.getEngine()
-    const parsed = fromHtml(html(fontFamily))
-    const node = decodeNode(parsed.node)
-    const fetchedResources: ImageSource[] = await Promise.all([...new Set(extractResourceUrls(node))]
-      .filter((src) => !src.startsWith('data:'))
-      .map(async (src) => ({ src, data: await this.client.image(src).catch(() => missingImage) })))
-    this.signal.throwIfAborted()
-    return renderer.render(node, { width, format: 'png', stylesheets: parsed.stylesheets, fetchedResources }, this.signal)
+    const takumi = this.takumi()
+    if (!takumi) throw new Error('Takumi rendering service is not enabled')
+    // Images stay behind MojangClient.image and its trusted host list; failures keep the dark card's placeholder color.
+    return takumi.render(html(takumi.fontFamily), {
+      width, format: 'png', signal: this.signal, fetch: (src) => this.client.image(src).catch(() => missingImage)
+    })
   }
 
   server(status: ServerStatus, label: string | undefined, avatar: Avatar): Promise<Buffer> {
@@ -262,13 +241,6 @@ export class CardRenderer {
 
 /** Returns an avatar URL for a player UUID or name, or nothing when the configured service cannot serve it. */
 export type Avatar = (player: { name: string; id?: string }) => string | undefined
-
-/** fromHtml keeps entities; decoding the parsed tree, never the raw HTML, keeps user text from becoming markup. */
-export function decodeNode(node: Node): Node {
-  if (node.type === 'text') return { ...node, text: h.unescape(node.text) }
-  if (node.type === 'image') return { ...node, src: typeof node.src === 'string' ? h.unescape(node.src) : node.src }
-  return { ...node, children: node.children?.map((child) => child ? decodeNode(child) : child) }
-}
 
 export function serverHtml(status: ServerStatus, label: string | undefined, avatar: Avatar, fontFamily: string): string {
   const accent = accents[status.edition]

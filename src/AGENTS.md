@@ -12,7 +12,7 @@
 - `auto` 模式 Java 版成功即返回并取消基岩版；基岩版先成功时最多再等 Java 版 `bedrockGrace` 毫秒，避免 fake-ip 环境下 Java 端口挂起拖住回复。
 - 协议号对照表来自 PrismarineJS minecraft-data，`MojangClient.protocolName` 内存缓存一天，失败下次重试；卡片和文字只在有结果时显示版本名。
 - Mojang 接口（`mojang.ts`）只访问官方域名与 `trustedImage` 白名单中的图片域名；玩家输入只接受玩家名或 UUID，不拼接任意路径。
-- 卡片（`render.ts`）用 Takumi 渲染，不启动浏览器。用户文本先 HTML 转义，解析后在节点树里解码（`decodeNode`），不让文本变成标签。远程图片失败显示占位色块。图标为 Tabler Icons 路径。
+- 卡片（`render.ts`）交给可选服务 `takumi`（`chatluna-plugin-takumi`）渲染，每次渲染时经 `ctx.get` 取用，未启用即抛错并由 `Toolbox.present` 降级为文字；字体、并发与节点解码由服务负责。用户文本先 HTML 转义，服务在解析后的节点树里解码，不让文本变成标签。远程图片只经 `MojangClient.image` 下载，失败时由本插件返回深色占位色块。图标为 Tabler Icons 路径。
 - Takumi 限制：绝对定位的裁剪容器内再放带负偏移的绝对定位子元素会整层丢失，所以服务器卡片的模糊背景和遮罩直接挂在卡片上；`filter: blur` 会溢出元素边缘，遮罩须比背景更高并提前变为不透明。
 - 像素图（favicon、皮肤、披风）用 `image-rendering: pixelated`。玩家头像由 `skinCrop` 从皮肤贴图裁出脸部与帽子层，不依赖第三方头像服务。
 - fake-ip 网段的 IP 对用户没有意义，卡片和文字都不显示（`isFakeIp`）。

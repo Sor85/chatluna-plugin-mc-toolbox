@@ -43,7 +43,7 @@ export const Config: Schema<Config> = Schema.intersect([
     output: Schema.union([
       Schema.const('image').description('图片'),
       Schema.const('text').description('文字')
-    ]).role('radio').label('默认输出').description('指令可用 -t / -i 临时切换').default('image'),
+    ]).role('radio').label('默认输出').description('指令可用 -t / -i 临时切换。图片需启用 chatluna-plugin-takumi，未启用时输出文字').default('image'),
     tools: Schema.boolean().label('注册 AI 工具').description('允许模型查询服务器与玩家').default(true)
   }).description('基础设置'),
   Schema.object({
