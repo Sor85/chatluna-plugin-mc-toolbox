@@ -75,11 +75,11 @@
       "required": [
         "http",
         "koishi",
-        "chat"
+        "chat",
+        "takumi"
       ],
       "optional": [
-        "tools",
-        "takumi"
+        "tools"
       ]
     }
   }

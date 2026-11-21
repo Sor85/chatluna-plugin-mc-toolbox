@@ -14,7 +14,7 @@ ChatLuna v2 的 Minecraft 工具箱插件（服务器查询、玩家查询、Jav
 ## 跨领域约定
 
 - 配置使用 `@chatluna/schema`，经 `Config` 进入 `apply`；不使用 Zod、环境变量或读取宿主配置。
-- 必需服务为 `http`、`koishi`、`chat`；`tools` 可选，经 `ctx.inject` 子作用域注册。网络请求与定时器绑定插件生命周期，卸载时取消。
+- 必需服务为 `http`、`koishi`、`chat`、`takumi`；`tools` 可选，经 `ctx.inject` 子作用域注册。Cordis 4 把 `inject` 的每一项都当作必需，可选服务不能写进 `inject`。网络请求与定时器绑定插件生命周期，卸载时取消。
 - 无 `any`、常规类型断言；外部响应一律按 `unknown` 校验后使用。
 - README 面向使用者，说明功能、配置与限制；实现决策记录在 `.agents/notes/implemented/feature/2026-11-13-mc-toolbox.{zh,en}.md`。
 

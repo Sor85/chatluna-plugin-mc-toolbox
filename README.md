@@ -1,6 +1,6 @@
 # chatluna-plugin-mc-toolbox
 
-ChatLuna v2 的 Minecraft 工具箱：服务器状态查询、Java 版玩家信息查询、Java 版更新播报。结果可输出为文字或 PNG 卡片；卡片由 [Takumi 渲染服务](https://github.com/Sor85/chatluna-plugin-takumi) 生成，需同时启用 `chatluna-plugin-takumi`，未启用时自动改为文字。
+ChatLuna v2 的 Minecraft 工具箱：服务器状态查询、Java 版玩家信息查询、Java 版更新播报。结果可输出为文字或 PNG 卡片；卡片由 [Takumi 渲染服务](https://github.com/Sor85/chatluna-plugin-takumi) 生成。本插件需要同时安装并启用 `chatluna-plugin-takumi`，未启用时不会启动。
 
 ## 功能
 

@@ -210,14 +210,11 @@ function footer(label: string): string {
 }
 
 export class CardRenderer {
-  /** `takumi` is optional: read it per render so the cards return as soon as the service is enabled. */
-  constructor(private takumi: () => Pick<Takumi, 'render' | 'fontFamily'> | undefined, private client: Pick<MojangClient, 'image'>, private signal: AbortSignal) {}
+  constructor(private takumi: Pick<Takumi, 'render' | 'fontFamily'>, private client: Pick<MojangClient, 'image'>, private signal: AbortSignal) {}
 
   private async render(html: (fontFamily: string) => string): Promise<Buffer> {
-    const takumi = this.takumi()
-    if (!takumi) throw new Error('Takumi rendering service is not enabled')
     // Images stay behind MojangClient.image and its trusted host list; failures keep the dark card's placeholder color.
-    return takumi.render(html(takumi.fontFamily), {
+    return this.takumi.render(html(this.takumi.fontFamily), {
       width, format: 'png', signal: this.signal, fetch: (src) => this.client.image(src).catch(() => missingImage)
     })
   }
